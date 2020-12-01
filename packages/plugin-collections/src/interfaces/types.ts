@@ -4,6 +4,7 @@
 // 参数的优先级：
 // 1、interface，type 尽量只随 interface 变动，而不受别的字段影响（特殊情况除外）
 // 2、
+
 // TODO: interface 的修改
 export const string = {
   title: '单行文本',
@@ -141,7 +142,7 @@ export const select = {
  * filter 要处理
  * 不能处理 json 搜索的数据库可以用 hasMany 转化
  * 
- * 思考：🤔 如果 select合并成一个 interface，multiple 会影响 type
+ * 思考：🤔 如果 select 合并成一个 interface，multiple 会影响 type
  */
 export const multipleSelect = {
   title: '下拉选择（多选）',
@@ -307,6 +308,13 @@ export const subTable = {
 //       target: 'bars',
 //       sourceKey: 'id',
 //       foreignKey: 'foo_id',
+//     },
+//     {
+//       type: 'belongsTo',
+//       name: 'xxx', // 随机生成
+//       target: 'table_a',
+//       sourceKey: 'id',
+//       foreignKey: 'table_a_id'
 //     }
 //   ],
 // });
@@ -320,8 +328,8 @@ export const linkTo = {
   title: '关联数据',
   options: {
     interface: 'linkTo',
-    multiple: true, // 可能影响 type
-    type: 'belongsToMany',
+    // multiple: false, // 可能影响 type
+    type: 'belongsTo',
     // name,
     // target: '关联表', // 用户会输入
     filterable: true,
@@ -329,6 +337,39 @@ export const linkTo = {
       type: 'drawerSelect',
     },
   },
+  make(model) {
+    const values = model.get();
+    // 如果定义了可选多项
+    if (values.multiple) {
+      // 修改 type 为 hasMany
+      // 倾向于输出和数据库一致，即使修改数据库结构也是可以完成的
+      values.type = 'hasMany';
+    }
+    // 创建字段的话 target 表一定是已定义的
+    let table;
+    // 如果 target 不存在
+    if (!values.target) {
+      // 通过 name 查找 target
+      table = model.database.getTable(values.name);
+      if (!table) {
+        throw new Error(`target table ${values.name} does not exist`);
+      }
+      values.target = table.getName();
+    } else {
+      table = model.database.getTable(values.target);
+    }
+    if (!values.sourceKey) {
+      values.sourceKey = model.constructor.primaryKeyAttribute;
+    }
+    if (!values.foreignKey) {
+      values.foreignKey = table.getModel().primaryKeyAttribute;
+    }
+
+    model.set(values);
+  },
+  async migrate() {
+
+  }
 };
 
 export const createdBy = {

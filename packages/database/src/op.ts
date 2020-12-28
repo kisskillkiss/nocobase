@@ -1,4 +1,5 @@
-import { Op, Utils } from 'sequelize';
+import { col, fn, Op, Utils } from 'sequelize';
+import { BELONGSTO } from '.';
 
 function toArray(value: any): any[] {
   if (value == null) {
@@ -58,6 +59,32 @@ op.set('$match', (values: any[]) => {
     [Op.contained]: array
   };
 });
+
+// 关系类型
+// TODO(optimize): 这里的处理函数接口类型与其他普通值的不同
+// 存在
+// op.set('$exists', function(value, key, { model, sourceAlias }) {
+//   return this.$exists = model.database.sequelize.where(fn('count', col(sourceAlias)), Op.gt, 0);
+// });
+op.set('$exists', function(filter, key, { model }) {
+  const table = model.database.getTable(model.name);
+  const associationField = table.getField(key);
+  if (associationField instanceof BELONGSTO) {
+    this.where[associationField.options.foreignKey] = { [Op.not]: null };
+  } else {
+    this.include[key].required = true;
+  }
+});
+// 不存在
+// op.set('$notExists', function(filter, key, { model }) {
+//   const table = model.database.getTable(model.name);
+//   const associationField = table.getField(key);
+//   if (associationField instanceof BELONGSTO) {
+//     this.where[associationField.options.foreignKey] = { [Op.is]: null };
+//   } else {
+//     this.where[]
+//   }
+// });
 
 
 

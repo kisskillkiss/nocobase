@@ -2,6 +2,7 @@ import { Utils } from 'sequelize';
 import Model, { ModelCtor } from './model';
 import _ from 'lodash';
 import op from './op';
+import { BELONGSTO } from './fields/field-types';
 
 interface ToWhereContext {
   model?: ModelCtor<Model> | Model | typeof Model;
@@ -10,36 +11,47 @@ interface ToWhereContext {
   ctx?: any;
 }
 
-export function toWhere(options: any, context: ToWhereContext = {}) {
-  if (options === null || typeof options !== 'object') {
-    return options;
+export function toWhere(filter: any, context: ToWhereContext = {}) {
+  if (filter === null || typeof filter !== 'object') {
+    return filter;
   }
-  if (Array.isArray(options)) {
-    return options.map((item) => toWhere(item, context));
+  if (Array.isArray(filter)) {
+    return filter.map((item) => toWhere(item, context));
   }
   const { model, associations = {}, ctx, dialect } = context;
   const items = {};
   // 先处理「点号」的问题
-  for (const key in options) {
-    _.set(items, key, options[key]);
+  for (const key in filter) {
+    _.set(items, key, filter[key]);
   }
-  const values = {};
+  const queryOptions = { where: {}, include: {}, scopes: [] };
   for (const key in items) {
-    if (associations[key]) {
-      values['$__include'] = values['$__include'] || {}
-      values['$__include'][key] = toWhere(items[key], {
-        ...context,
-        model: associations[key].target,
-        associations: associations[key].target.associations,
-      });
+    const association = associations[key];
+    console.log(key);
+    if (association) {
+      const { $exists, $notExists, ...conditions } = items[key];
+      if (Object.keys(conditions).length || !(association instanceof BELONGSTO)) {
+        queryOptions.include[key] = toWhere(conditions, {
+          ...context,
+          model: association.target,
+          associations: association.target.associations,
+        });
+      }
+      if (typeof $exists !== 'undefined') {
+        const fn = op.get('$exists') as Function;
+        fn.call(queryOptions, items, key, context);
+      }
+      // if (typeof $notExists !== 'undefined') {
+      //   const fn = op.get('$notExists') as Function;
+      //   Object.assign(queryOptions, fn(association));
+      // }
     }
     else if (model && model.options.scopes && model.options.scopes[key]) {
-      values['$__scopes'] = values['$__scopes'] || [];
       const scope = model.options.scopes[key];
       if (typeof scope === 'function') {
-        values['$__scopes'].push({ method: [key, items[key], ctx] });
+        queryOptions.scopes.push({ method: [key, items[key], ctx] });
       } else {
-        values['$__scopes'].push(key);
+        queryOptions.scopes.push(key);
       }
     }
     else {
@@ -48,7 +60,7 @@ export function toWhere(options: any, context: ToWhereContext = {}) {
       let k;
       switch (typeof opKey) {
         case 'function':
-          Object.assign(values, opKey(items[key]));
+          Object.assign(queryOptions, opKey(items[key]));
           continue;
         case 'undefined':
           k = key;
@@ -57,10 +69,11 @@ export function toWhere(options: any, context: ToWhereContext = {}) {
           k = opKey;
           break;
       }
-      values[k] = toWhere(items[key], context);
+      // TODO(optimize): 此处无法支持 not 替代当前 key 的反向逻辑
+      queryOptions.where[k] = toWhere(items[key], context);
     }
   }
-  return values;
+  return queryOptions;
 }
 
 interface ToIncludeContext {
@@ -131,8 +144,8 @@ export function toInclude(options: any, context: ToIncludeContext = {}) {
           const includeItem: any = {
             association: col,
           };
-          if (includeWhere[col]) {
-            includeItem.where = includeWhere[col];
+          if (includeOptions[col]) {
+            Object.assign(includeItem, includeOptions[col]);
           }
           include.set(col, includeItem);
           return;
@@ -159,20 +172,23 @@ export function toInclude(options: any, context: ToIncludeContext = {}) {
   const { model, sourceAlias, associations = {}, ctx, dialect } = context;
 
   let where = options.where || {};
+  let includeOptions = {};
+  let scopes = [];
 
   if (filter) {
-    where = toWhere(filter, {
+    const whereOptions = toWhere(filter, {
       model,
       associations,
       ctx,
     }) || {};
+    where = whereOptions.where;
+    if (whereOptions.include) {
+      includeOptions = Utils.cloneDeep(whereOptions.include);
+    }
+    if (whereOptions.scopes) {
+      scopes = Utils.cloneDeep(whereOptions.scopes);
+    }
   }
-
-  const includeWhere = Utils.cloneDeep(where.$__include||{});
-  const scopes = Utils.cloneDeep(where.$__scopes||[]);
-
-  delete where.$__include;
-  delete where.$__scopes;
 
   const attributes = {
     only: [],
@@ -190,14 +206,14 @@ export function toInclude(options: any, context: ToIncludeContext = {}) {
   makeFields('appends');
   makeFields('except');
 
-  for (const whereKey in includeWhere) {
-    if (children.has(whereKey)) {
-      children.get(whereKey).where = includeWhere[whereKey];
+  for (const key in includeOptions) {
+    if (children.has(key)) {
+      Object.assign(children.get(key), includeOptions[key]);
     } else {
-      children.set(whereKey, {
-        association: whereKey,
+      children.set(key, {
+        association: key,
         fields: [],
-        where: includeWhere[whereKey],
+        ...includeOptions[key],
       });
     }
   }

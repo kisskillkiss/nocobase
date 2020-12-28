@@ -289,6 +289,22 @@ describe('list', () => {
             expect(response.body.count).toBe(0);
           });
         });
+
+        describe.only('$exists', () => {
+          it('belongsTo $exists true', async () => {
+            const Post = db.getModel('posts');
+            await Post.create();
+            const response = await agent.get('/posts?filter[user.$exists]');
+            expect(response.body.count).toBe(25);
+          });
+
+          it('hasMany $exists true', async () => {
+            const User = db.getModel('users');
+            await User.create();
+            const response = await agent.get('/users?filter[posts.$exists]');
+            expect(response.body.count).toBe(3);
+          });
+        });
       });
     });
 

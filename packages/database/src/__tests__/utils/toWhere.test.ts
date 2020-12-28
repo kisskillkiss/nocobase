@@ -244,6 +244,46 @@ describe('utils.toWhere', () => {
         array: { [Op.or]: [{ [Op.contains]: 'a' }, { [Op.contains]: 'b' }] }
       });
     });
+    it('Op.$exists belongsTo', () => {
+      const Post = db.getModel('posts');
+      expect(toWhere({
+        'user.$exists': true
+      }, {
+        model: Post,
+        associations: Post.associations
+      }).where).toEqual({
+        user_id: { [Op.not]: null }
+      });
+    });
+
+    it.only('Op.$exists hasMany', () => {
+      const Category = db.getModel('categories');
+      expect(toWhere({
+        'posts.$exists': true
+      }, {
+        model: Category,
+        associations: Category.associations
+      })).toEqual({
+        where: {},
+        include: {
+          posts: {
+            required: true
+          }
+        }
+      });
+    });
+
+    it.skip('Op.$notExists belongsTo', () => {
+      const Post = db.getModel('posts');
+      expect(toWhere({
+        'user.$notExists': true
+      }, {
+        model: Post,
+        associations: Post.associations
+      })).toEqual({
+        where: { user_id: { [Op.is]: null } }
+      });
+    });
   });
 
   describe('group by logical operator', () => {

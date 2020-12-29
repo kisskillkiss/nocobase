@@ -418,6 +418,31 @@ describe('toInclude', () => {
       });
     });
     
+    // TODO(bug): where.$__include 问题
+    it.skip('where', () => {
+      toIncludeExpect({
+        filter: {
+          and: [
+            { col1: 'val1' },
+            {
+              bars: { col1: 'val1', }
+            }
+          ]
+        }
+      }).toEqual({
+        where: {
+          col1: 'val1',
+        },
+        include: [
+          {
+            association: 'bars',
+            where: {
+              col1: 'val1',
+            }
+          }
+        ],
+        distinct: true,
+      });
+    });
   });
-
 });

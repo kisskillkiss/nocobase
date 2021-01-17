@@ -42,8 +42,8 @@ export class CollectionModel extends BaseModel {
    *
    * @param name 
    */
-  static async findByName(name: string) {
-    return this.findOne({ where: { name } });
+  static async findByName(name: string, options = {}) {
+    return this.findOne({ ...options, where: { name } });
   }
 
   /**

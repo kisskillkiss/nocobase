@@ -1,11 +1,12 @@
 import qs from 'qs';
+import path from 'path';
 import plugin from '../server';
 import supertest from 'supertest';
 import bodyParser from 'koa-bodyparser';
 import { Dialect } from 'sequelize';
 import Database from '@nocobase/database';
 import { actions, middlewares } from '@nocobase/actions';
-import { Application, middleware } from '@nocobase/server';
+import { Application, middleware } from '@nocobase/server/src';
 
 function getTestKey() {
   const { id } = require.main;
@@ -39,6 +40,12 @@ const config = {
       drop: true,
     },
   },
+  collectionSync: {
+    force: true,
+    alter: {
+      drop: true,
+    },
+  },
 };
 
 export async function getApp() {
@@ -58,6 +65,7 @@ export async function getApp() {
   app.resourcer.use(middlewares.associated);
   app.resourcer.registerActionHandlers({...actions.associate, ...actions.common});
   app.registerPlugin('collections', [plugin]);
+  app.registerPlugin('users', [path.resolve(__dirname, '../../../plugin-users')]);
   await app.loadPlugins();
   await app.database.sync();
   // 表配置信息存到数据库里
@@ -72,7 +80,6 @@ export async function getApp() {
   });
   app.use(bodyParser());
   app.use(middleware({
-    prefix: '/api',
     resourcer: app.resourcer,
     database: app.database,
   }));

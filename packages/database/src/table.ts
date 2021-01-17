@@ -400,6 +400,7 @@ export class Table {
     for (const name of this.getRelatedTableNames()) {
       tables.push(name);
     }
+    console.log(tables);
     return this.database.sync({
       ...options,
       tables,

@@ -393,6 +393,7 @@ export const createdBy = {
     target: 'users',
     labelField: 'nickname',
     foreignKey: 'created_by_id',
+    targetId: 'id',
     appends: true,
     component: {
       type: 'drawerSelect',

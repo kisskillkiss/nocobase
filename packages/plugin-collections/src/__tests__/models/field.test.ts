@@ -1,5 +1,5 @@
 import { Agent, getAgent, getApp } from '../';
-import { Application } from '@nocobase/server';
+import { Application } from '@nocobase/server/src';
 import { options, types } from '../../interfaces';
 jest.setTimeout(30000);
 import { FieldModel } from '../../models';
@@ -13,6 +13,13 @@ describe('models.field', () => {
   });
 
   afterEach(() => app.database.close());
+
+  async function createCollection(data) {
+    const [Collection, Field] = app.database.getModels(['collections', 'fields']);
+    const collection = await Collection.create(data);
+    await collection.updateAssociations(data);
+    return collection;
+  }
 
   it('updatedAt', async () => {
     const Field = app.database.getModel('fields');
@@ -51,53 +58,10 @@ describe('models.field', () => {
     ]);
   });
 
-  it.skip('sub table field', async () => {
-    const [Collection, Field] = app.database.getModels(['collections', 'fields']);
-    const options = {
-      title: 'tests',
-      name: 'tests',
-      fields: [
-        {
-          interface: 'subTable',
-          title: '子表格',
-          name: 'subs',
-          children: [
-            {
-              interface: 'string',
-              title: '名称',
-              name: 'name',
-            },
-          ],
-        },
-      ],
-    };
-    const collection = await Collection.create(options);
-    await collection.updateAssociations(options);
-    const field = await Field.findOne({
-      where: {
-        title: '子表格',
-      },
-    });
-    await field.createChild({
-      interface: 'string',
-      title: '名称',
-      name: 'title',
-    });
-    const Test = app.database.getModel('tests');
-    const Sub = app.database.getModel('subs');
-    // console.log(Test.associations);
-    // console.log(Sub.rawAttributes);
-    const test = await Test.create({});
-    const sub = await test.createSub({name: 'name1', title: 'title1'});
-    expect(sub.toJSON()).toMatchObject({name: 'name1', title: 'title1'})
-  });
-
-  it('sub table field', async () => {
-    const [Collection, Field] = app.database.getModels(['collections', 'fields']);
-    // @ts-ignore
-    const options = {
-      title: 'tests',
-      name: 'tests',
+  it('subTable', async () => {
+    await createCollection({
+      title: 'bars',
+      name: 'bars',
       fields: [
         {
           interface: 'subTable',
@@ -106,24 +70,85 @@ describe('models.field', () => {
           children: [
             {
               interface: 'string',
-              title: '名称',
+              title: '子字段1',
               // name: 'name',
             },
           ],
         },
       ],
-    };
-    const collection = await Collection.create(options);
-    await collection.updateAssociations(options);
-    const field = await Field.findOne({
-      where: {
-        title: '子表格',
-      },
     });
-    await field.createChild({
-      interface: 'string',
-      title: '名称',
-      name: 'title',
+  });
+
+  it('subTable with linkTo', async () => {
+    await createCollection({
+      title: 'foos',
+      name: 'foos',
+      fields: [
+        {
+          interface: 'string',
+          title: '标题1'
+        },
+      ],
+    });
+    await createCollection({
+      title: 'bars',
+      name: 'bars',
+      fields: [
+        {
+          interface: 'subTable',
+          title: '子表格',
+          // name: 'subs',
+          children: [
+            {
+              interface: 'string',
+              title: '子字段1',
+              // name: 'name',
+            },
+            {
+              interface: 'linkTo',
+              title: '关联1',
+              target: 'foos',
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it.only('subTable with linkTo multiple = false(A.B + B.C = A.C)', async () => {
+    await createCollection({
+      title: 'foos',
+      name: 'foos',
+      fields: [
+        {
+          interface: 'string',
+          title: '标题1'
+        },
+      ],
+    });
+    await createCollection({
+      title: 'bars',
+      name: 'bars',
+      fields: [
+        {
+          interface: 'subTable',
+          title: '子表格',
+          // name: 'subs',
+          children: [
+            {
+              interface: 'string',
+              title: '子字段1',
+              // name: 'name',
+            },
+            {
+              interface: 'linkTo',
+              title: '关联1',
+              target: 'foos',
+              multiple: false,
+            },
+          ],
+        },
+      ],
     });
   });
 });

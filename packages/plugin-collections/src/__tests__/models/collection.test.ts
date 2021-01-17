@@ -1,5 +1,5 @@
 import { Agent, getAgent, getApp } from '../';
-import { Application } from '@nocobase/server';
+import { Application } from '@nocobase/server/src';
 import * as types from '../../interfaces/types';
 jest.setTimeout(30000);
 describe('models.collection', () => {

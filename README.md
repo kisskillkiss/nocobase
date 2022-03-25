@@ -1,27 +1,21 @@
 English | [简体中文](./README.zh-CN.md)
 
-Note
-----------
-NocoBase is still in early development and is for preview purposes only and is not suitable for use in a production environment.  
-If you are interested in NocoBase, please join us to discuss and develop it together.
-
-https://www.nocobase.com/  
-hello@nocobase.com
+![](https://nocobase.oss-cn-beijing.aliyuncs.com/bbcedd403d31cd1ccc4e9709581f5c2f.png)  
 
 What is NocoBase
 ----------
-NocoBase is an open source and free no-code development platform. Whether you are a business executive who does not know programming or a developer who is proficient in programming, you can quickly build various customized and privately deployed collaboration platforms and management systems.
+NocoBase is a scalability-first, open-source no-code development platform. No programming required, build your own collaboration platform, management system with NocoBase in minutes.
 
-Who is NocoBase for
-----------
-- **SMEs and organizations**
-	- Proficient in the business of their organization or industry
-	- Looking to build digital systems
-- **IT service providers and outsourcing teams**
-	- Provide digital upgrade for SMEs and organizations
-	- Have development capabilities
+Homepage:
+https://www.nocobase.com/  
 
-When to use Nocobase
+Online Demo:
+https://demo.nocobase.com/new
+
+Contact Us:
+hello@nocobase.com
+
+When to use NocoBase
 ----------
 - **SMEs and organizations build business platforms and management systems for themselves or for their industry**
 	- Want the price to be low enough or even free
@@ -42,56 +36,77 @@ Why choose NocoBase
 	- Free to expand and develop for actual needs
 	- Good ecological support
 - **Strong no-code capability**
-	- More advanced codeless architecture, both flexible and easy to use, can make a powerful system even if you don't know programming
-	- Support tables, calendars, forms, details, statistical charts and other types of views freely combined into the page
-	- Unlimited hierarchical configuration of navigation menus, allowing flexible organization of pages
-	- Precise configuration of data manipulation rights, access rights to pages and menus
+	- WYSIWYG visual configuration
+	- Separation of data structure configuration from interface configuration
+	- Rich combination of blocks and operations
+	- Role-based access control
 - **Developer-friendly**
 	- Microkernel architecture, flexible and easy to extend, with a robust plug-in system
-	- Node.js-based, using mainstream frameworks and technologies, including Koa, Sequelize, React, Ant Design, etc.
-	- Progressive development, low start-up difficulty, friendly to newcomers
-	- No abduction, no strong dependencies, can be used in any combination or extensions, can be used in existing projects
+	- Node.js-based, with popular frameworks and technologies, including Koa, Sequelize, React, Formily, Ant Design, etc.
+	- Progressive development, easy for getting-started, friendly to newcomers
+	- No binding, no strong dependencies, can be used in any combination or extensions, can be used in existing projects
+
+Note
+----------
+NocoBase is still in early development and is for preview purposes only and is not suitable for use in a production environment.  A relatively stable and well-documented public beta is expected to be released as early as April 2022.
+If you are interested in NocoBase, please join us to discuss and develop it together.
 
 Architecture
 ----------
 
-![](https://nocobase.oss-cn-beijing.aliyuncs.com/4fde069587182dacbdb00b020d914404.jpg)
+![](https://docs.nocobase.com/static/NocoBase.c9542b1f.png)
 
-Development
+Requirements
 ----------
 
-Install Dependencies
+Node:
 
+- Node.js 12.20+
+
+Database:
+
+- PostgreSQL 10.x+
+- Sqlite 3+
+
+Installation
+----------
+
+### Create a project with `create-nocobase-app`
+
+#### Quickstart
 ~~~shell
-# Install dependencies for root project
-npm i
-
-# Install dependencies for sub packages via lerna
-npm run bootstrap
+yarn create nocobase-app my-nocobase-app --quickstart --lang=en-US
+# `--lang=en-US` Language settings support `--lang=en-US` and `--lang=zh-CN`
 ~~~
 
-Set Environment Variables
-
+#### Step by step
 ~~~shell
-cp .env.example .env
+# 1. create project
+yarn create nocobase-app my-nocobase-app
+
+# 2. switch to the project directory
+cd my-nocobase-app
+
+# 3. create initialization data
+yarn nocobase init --import-demo --lang=en-US
+# `--import-demo` Importing demo data
+# `--lang=en-US` Language settings support `--lang=en-US` and `--lang=zh-CN`
+
+# 4. start project
+yarn start
 ~~~
 
-Build
+Open [http://localhost:8000](http://localhost:8000) in a web browser. The initial account and password are `admin@nocobase.com` and `admin123`.
 
-~~~shell
-# for all packages
-npm run build
+### Installing from Docker
 
-# for specific package
-npm run build <package_name_1> <package_name_2> ...
-~~~
+```bash
+docker run --name my-nocobase-app -p 8000:13002 -d nocobase/nocobase
+docker logs my-nocobase-app
+```
 
-Test
+Open http://localhost:8000 in a web browser.
 
-~~~
-# For all packages
-npm test
+## Contributing
 
-# For specific package
-npm test packages/<name>
-~~~
+https://docs.nocobase.com/guide/contributing

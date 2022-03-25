@@ -1,15 +1,9 @@
-# NocoBase Application
+# NocoBase
 
 ## Getting Started
 
-Install dependencies,
-
 ```bash
-$ yarn install
-```
-
-Start the dev server,
-
-```bash
-$ yarn start
+yarn install
+yarn nocobase init
+yarn start
 ```

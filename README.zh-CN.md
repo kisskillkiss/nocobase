@@ -1,29 +1,15 @@
 [English](./README.md) | 简体中文
 
-![](https://nocobase.oss-cn-beijing.aliyuncs.com/b44a2146ad4c4b20e6f7fe52a0e8d04e.png)  
-  
-  
-说明
-----------
-NocoBase 仍处于早期开发阶段，仅用于预览，不适合在生产环境中使用。相对稳定以及包含完善文档的公开测试版预计将于 2021 年第三季度发布。
-
-如果你希望加入我们一起开发 NocoBase，或者探讨 NocoBase 未来发展，或者需要提供 NocoBase 使用上的帮助，欢迎通过邮件联系我们：hello@nocobase.com
+![](https://www.nocobase.com/images/demo/11.png)  
 
 NocoBase 是什么
 ----------
-NocoBase 是一个开源免费的无代码开发平台。
-无论是不懂编程的业务主管，还是精通编程的开发人员，都可以快速搭建各类定制化、私有部署的协作平台、管理系统。  
+NocoBase 是一个极易扩展的开源无代码开发平台。
+无需编程，使用 NocoBase 搭建自己的协作平台、管理系统，只需要几分钟时间。 
 
-[https://www.nocobase.com/](https://www.nocobase.com/)
+官网：https://cn.nocobase.com/
 
-哪些人适合使用 NocoBase
-----------
-- 中小企业和组织
-   - 精通所在组织或行业的业务
-   - 希望搭建数字化系统
-- IT 服务商和外包团队
-   - 为中小企业和组织提供数字化升级
-   - 拥有系统开发能力
+在线体验：https://demo-cn.nocobase.com/new
 
 哪些场景适合使用 NocoBase
 ----------
@@ -46,77 +32,85 @@ NocoBase 是一个开源免费的无代码开发平台。
    - 针对实际需求自由扩展开发
    - 具备良好的生态支持
 - 无代码能力强
-   - 灵活的“菜单→页面→视图→数据”架构，不懂编程也能做出强大的系统
-   - 像创建文档一样无限制地创建页面，并通过不限层级的导航菜单灵活组织
-   - 像输入文字一样向页面中添加表格、日历、表单、图表等各类视图并自由组合
-   - 精确配置数据的操作权限、页面和菜单的访问权限
+   - 所见即所得的可视化配置
+   - 数据结构配置与界面配置分离
+   - 丰富的区块和操作任意组合
+   - 基于角色的访问权限
 - 对开发者友好
    - 微内核，灵活易扩展，具备健全的插件体系
-   - 基于 Node.js，使用主流框架和技术，包括 Koa、Sequelize、React、Ant Design 等
+   - 基于 Node.js，使用主流框架和技术，包括 Koa、Sequelize、React、Formily、Ant Design 等
    - 渐进式开发，上手难度低，对新人友好
    - 不绑架、不强依赖，可任意组合使用或扩展，可用于现有项目中
 
+说明
+----------
+NocoBase 仍处于早期开发阶段，功能不完整，稳定性不高，仅用于预览，不适合在生产环境中使用。相对稳定以及包含开发文档的公开测试版预计最早将于 2022 年 4 月发布。
+
+如果你希望加入我们一起开发 NocoBase，或者探讨 NocoBase 未来发展，或者需要提供 NocoBase 使用上的帮助，欢迎通过邮件联系我们：hello@nocobase.com  
+
+或者添加我们的微信：  
+
+![](https://www.nocobase.com/images/wechat.png)  
+
+
 NocoBase 架构
 ----------
-![](https://nocobase.oss-cn-beijing.aliyuncs.com/4fde069587182dacbdb00b020d914404.jpg)
+![](https://docs.nocobase.com/static/NocoBase.c9542b1f.png)
 
-- **微内核**  
-NocoBase 采用微内核架构，框架只保留核心的概念，具体各类功能都以插件的形式扩展。各个包可以拆出来单独或组合使用，可用于现有项目中，这也是渐进式框架的意义所在。除此之外，我们也非常注重与现有技术框架融合，做连接现有生态的桥梁，而不是闭门造车。
 
-- **插件化**  
-所有的功能需求都通过插件形式扩展，除了现有的几个核心插件以外，开发者还可以自由的扩展，包括但不局限于：
-   - Collection - 数据表
-   - Relationship - 相关数据
-   - Field - 字段
-   - Model - 模型
-   - Hook - 事件
-   - Resource - 资源
-   - Action - 操作方法
-   - Middleware - 中间件
-   - View - 视图
-   - Page - 页面
-
-- **配置化驱动**  
-配置化是常见的无代码/低代码技术方案，NocoBase 也是基于配置驱动的，为了方便各类配置需求，配置有三类写法：
-   - 直接写在代码里，多用于处理动态配置
-   - 保存在文件里，多用于系统表配置或纯开发配置
-   - 保存在数据表里，多用于业务表配置
-
-Development
+环境要求
 ----------
 
-Install Dependencies
+Node:
 
+- Node.js 12.20+
+
+Database:
+
+- PostgreSQL 10.x+
+- Sqlite 3+
+
+安装 & 运行
+----------
+
+### 通过 `create-nocobase-app` 创建项目
+
+#### 快速启动
 ~~~shell
-# Install dependencies for root project
-npm i
-
-# Install dependencies for sub packages via lerna
-npm run bootstrap
+yarn create nocobase-app my-nocobase-app --quickstart --lang=zh-CN
+# `--lang=en-US` 语言设置，支持 `--lang=en-US` 和 `--lang=zh-CN`
 ~~~
 
-Set Environment Variables
-
+#### 分步骤执行
 ~~~shell
-cp .env.example .env
+# 1. 创建项目
+yarn create nocobase-app my-nocobase-app
+
+# 2. 切换到项目根目录
+cd my-nocobase-app
+
+# 3. 初始化数据
+yarn nocobase init --import-demo --lang=zh-CN
+# `--import-demo` 导入演示数据
+# `--lang=en-US` 语言设置，支持 `--lang=en-US` 和 `--lang=zh-CN`
+
+# 4. 启动项目
+yarn start
 ~~~
 
-Build
+使用浏览器打开 [http://localhost:8000](http://localhost:8000)，初始的账号和密码为 `admin@nocobase.com` 和 `admin123`。
 
-~~~shell
-# for all packages
-npm run build
+### 使用 docker
 
-# for specific package
-npm run build <package_name_1> <package_name_2> ...
-~~~
+```bash
+# 启动 app
+docker run --name my-nocobase-app -p 8000:13002 -d nocobase/nocobase
+# 查看日志
+docker logs my-nocobase-app
+```
 
-Test
+使用浏览器打开 http://localhost:8000
 
-~~~
-# For all packages
-npm test
+## 参与贡献
 
-# For specific package
-npm test packages/<name>
-~~~
+https://docs.nocobase.com/zh-CN/guide/contributing

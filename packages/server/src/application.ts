@@ -1,63 +1,223 @@
 import Koa from 'koa';
-import Database, { DatabaseOptions } from '@nocobase/database';
-import Resourcer from '@nocobase/resourcer';
+import { Command, CommandOptions } from 'commander';
+import Database, { DatabaseOptions, TableOptions } from '@nocobase/database';
+import Resourcer, { ResourceOptions } from '@nocobase/resourcer';
+import { PluginType, Plugin, PluginOptions } from './plugin';
+import { registerActions } from '@nocobase/actions';
+import {
+  createCli,
+  createI18n,
+  createDatabase,
+  createResourcer,
+  registerMiddlewares,
+} from './helper';
+import { i18n, InitOptions } from 'i18next';
 
-export interface ApplicationOptions {
-  database: DatabaseOptions;
-  resourcer?: any;
+export interface ResourcerOptions {
+  prefix?: string;
 }
 
-export class Application extends Koa {
-  // static const EVENT_PLUGINS_LOADED = Symbol('pluginsLoaded');
+export interface ApplicationOptions {
+  database?: DatabaseOptions;
+  resourcer?: ResourcerOptions;
+  bodyParser?: any;
+  cors?: any;
+  dataWrapping?: boolean;
+  registerActions?: boolean;
+  i18n?: i18n | InitOptions;
+}
 
-  public readonly database: Database;
+interface DefaultState {
+  currentUser?: any;
+  [key: string]: any;
+}
+
+interface DefaultContext {
+  db: Database;
+  resourcer: Resourcer;
+  [key: string]: any;
+}
+
+interface MiddlewareOptions {
+  name?: string;
+  resourceName?: string;
+  resourceNames?: string[];
+  insertBefore?: string;
+  insertAfter?: string;
+}
+
+interface ActionsOptions {
+  resourceName?: string;
+  resourceNames?: string[];
+}
+
+export class Application<
+  StateT = DefaultState,
+  ContextT = DefaultContext
+> extends Koa {
+  public readonly db: Database;
 
   public readonly resourcer: Resourcer;
 
-  protected plugins = new Map<string, any>();
+  public readonly cli: Command;
+
+  public readonly i18n: i18n;
+
+  protected plugins = new Map<string, Plugin>();
 
   constructor(options: ApplicationOptions) {
     super();
-    this.database = new Database(options.database);
-    this.resourcer = new Resourcer();
-    // this.runHook('afterInit');
+
+    this.db = createDatabase(options);
+    this.resourcer = createResourcer(options);
+    this.cli = createCli(this, options);
+    this.i18n = createI18n(options);
+
+    registerMiddlewares(this, options);
+    if (options.registerActions !== false) {
+      registerActions(this);
+    }
   }
 
-  registerPlugin(key: string | object, plugin?: any) {
-    if (typeof key === 'object') {
-      Object.keys(key).forEach((k) => {
-        this.registerPlugin(k, key[k]);
-      });
-    } else {
-      const config = {};
-      if (Array.isArray(plugin)) {
-        const [entry, options = {}] = plugin;
-        Object.assign(config, { entry, options });
-      } else {
-        Object.assign(config, { entry: plugin, options: {} });
+  use<NewStateT = {}, NewContextT = {}>(
+    middleware: Koa.Middleware<StateT & NewStateT, ContextT & NewContextT>,
+    options?: MiddlewareOptions,
+  ) {
+    // @ts-ignore
+    return super.use(middleware);
+  }
+
+  collection(options: TableOptions) {
+    return this.db.table(options);
+  }
+
+  resource(options: ResourceOptions) {
+    return this.resourcer.define(options);
+  }
+
+  actions(handlers: any, options?: ActionsOptions) {
+    return this.resourcer.registerActions(handlers);
+  }
+
+  command(nameAndArgs: string, opts?: CommandOptions) {
+    return this.cli.command(nameAndArgs, opts);
+  }
+
+  findCommand(name: string): Command {
+    return (this.cli as any)._findCommand(name);
+  }
+
+  plugin(options?: PluginType | PluginOptions, ext?: PluginOptions): Plugin {
+    if (typeof options === 'string') {
+      return this.plugin(require(options).default, ext);
+    }
+    let instance: Plugin;
+    if (typeof options === 'function') {
+      try {
+        // @ts-ignore
+        instance = new options({
+          name: options.name,
+          ...ext,
+          app: this,
+        });
+        if (!(instance instanceof Plugin)) {
+          throw new Error('plugin must be instanceof Plugin');
+        }
+      } catch (err) {
+        // console.log(err);
+        instance = new Plugin({
+          name: options.name,
+          ...ext,
+          // @ts-ignore
+          load: options,
+          app: this,
+        });
       }
-      this.plugins.set(key, config);
+    } else if (typeof options === 'object') {
+      const plugin = options.plugin || Plugin;
+      instance = new plugin({
+        name: options.plugin ? plugin.name : undefined,
+        ...options,
+        ...ext,
+        app: this,
+      });
     }
-  }
-
-  getPluginInstance(key: string) {
-    const plugin = this.plugins.get(key);
-    return plugin && plugin.instance;
-  }
-
-  async loadPlugins() {
-    const allPlugins = this.plugins.values();
-    for (const plugin of allPlugins) {
-      plugin.instance = await this.loadPlugin(plugin);
+    const name = instance.getName();
+    if (this.plugins.has(name)) {
+      throw new Error(`plugin name [${name}] is repeated`);
     }
+    this.plugins.set(name, instance);
+    return instance;
   }
 
-  protected async loadPlugin({ entry, options = {} }: { entry: string | Function, options: any }) {
-    const main = typeof entry === 'function'
-      ? entry
-      : require(`${entry}/${__filename.endsWith('.ts') ? 'src' : 'lib'}/server`).default;
+  async load() {
+    await this.emitAsync('plugins.beforeLoad');
+    for (const [name, plugin] of this.plugins) {
+      await this.emitAsync(`plugins.${name}.beforeLoad`);
+      await plugin.load();
+      await this.emitAsync(`plugins.${name}.afterLoad`);
+    }
+    await this.emitAsync('plugins.afterLoad');
+  }
 
-    return await main.call(this, options);
+  async emitAsync(event: string | symbol, ...args: any[]): Promise<boolean> {
+    // @ts-ignore
+    const events = this._events;
+    let callbacks = events[event];
+    if (!callbacks) {
+      return false;
+    }
+    // helper function to reuse as much code as possible
+    const run = (cb) => {
+      switch (args.length) {
+        // fast cases
+        case 0:
+          cb = cb.call(this);
+          break;
+        case 1:
+          cb = cb.call(this, args[0]);
+          break;
+        case 2:
+          cb = cb.call(this, args[0], args[1]);
+          break;
+        case 3:
+          cb = cb.call(this, args[0], args[1], args[2]);
+          break;
+        // slower
+        default:
+          cb = cb.apply(this, args);
+      }
+
+      if (cb && (cb instanceof Promise || typeof cb.then === 'function')) {
+        return cb;
+      }
+
+      return Promise.resolve(true);
+    };
+
+    if (typeof callbacks === 'function') {
+      await run(callbacks);
+    } else if (typeof callbacks === 'object') {
+      callbacks = callbacks.slice().filter(Boolean);
+      await callbacks.reduce((prev, next) => {
+        return prev.then((res) => {
+          return run(next).then((result) =>
+            Promise.resolve(res.concat(result)),
+          );
+        });
+      }, Promise.resolve([]));
+    }
+
+    return true;
+  }
+
+  async parse(argv = process.argv) {
+    await this.load();
+    return this.cli.parseAsync(argv);
+  }
+
+  async destroy() {
+    await this.db.close();
   }
 }
 

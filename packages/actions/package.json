@@ -1,24 +1,22 @@
 {
   "name": "@nocobase/actions",
-  "version": "0.4.0-alpha.0",
+  "version": "0.5.0-alpha.38",
   "description": "",
+  "license": "MIT",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
-  "scripts": {
-  },
-  "license": "MIT",
+  "scripts": {},
   "dependencies": {
-    "@nocobase/database": "^0.4.0-alpha.0",
-    "@nocobase/resourcer": "^0.4.0-alpha.0"
+    "@nocobase/database": "^0.5.0-alpha.38",
+    "@nocobase/resourcer": "^0.5.0-alpha.38"
   },
   "devDependencies": {
-    "koa": "^2.13.0",
-    "sequelize": "^6.3.4",
-    "typescript": "^3.9.6"
+    "@nocobase/test": "^0.5.0-alpha.38"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nocobase/nocobase.git",
     "directory": "packages/actions"
-  }
+  },
+  "gitHead": "e7df1f93c4e23b9a666d99ee7372c02bdaec97c4"
 }

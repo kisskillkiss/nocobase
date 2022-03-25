@@ -1,24 +1,5 @@
 import _ from 'lodash';
-import BaseModel from './base';
-import Field from './field';
-import { TableOptions } from '@nocobase/database';
-import { SaveOptions, Op } from 'sequelize';
-
-/**
- * 生成随机数据库表名
- * 
- * 策略：暂时使用  3+2
- *   1. 自增 id
- *   2. 随机字母
- *   3. 时间戳
- *   4. 转拼音
- *   5. 常见词翻译
- * 
- * @param title 显示的名称
- */
-export function generateCollectionName(title?: string): string {
-  return `t_${Date.now().toString(36)}_${Math.random().toString(36).replace('0.', '').slice(-4).padStart(4, '0')}`;
-}
+import { Model, TableOptions } from '@nocobase/database';
 
 export interface LoadOptions {
   reset?: boolean;
@@ -31,19 +12,53 @@ export interface MigrateOptions {
   [key: string]: any;
 }
 
-export class CollectionModel extends BaseModel {
-
-  generateName() {
-    this.set('name', generateCollectionName());
+export class Collection extends Model {
+  static async create(value?: any, options?: any): Promise<any> {
+    // console.log({ value });
+    const attributes = this.toAttributes(value);
+    // @ts-ignore
+    const model: Model = await super.create(attributes, options);
+    return model;
   }
 
-  /**
-   * 通过 name 获取 collection
-   *
-   * @param name 
-   */
-  static async findByName(name: string) {
-    return this.findOne({ where: { name } });
+  static toAttributes(value = {}): any {
+    const data = _.cloneDeep(value);
+    const keys = [
+      ...Object.keys(this.rawAttributes),
+      ...Object.keys(this.associations),
+    ];
+    const attrs = _.pick(data, keys);
+    const options = _.omit(data, keys);
+    return { ...attrs, options };
+  }
+
+  async toProps() {
+    const json = this.toJSON();
+    const data: any = _.omit(json, ['options', 'created_at', 'updated_at']);
+    const options = json['options'] || {};
+    const generalFields = await this.getNestedFields({
+      where: {
+        state: 1,
+      }
+    });
+    const systemFields = await this.getNestedFields({
+      where: {
+        state: 0,
+      }
+    });
+    return { ...data, ...options, generalFields, systemFields }
+  }
+
+  async getNestedFields(options) {
+    const fields = await this.getFields({
+      ...options,
+      order: [['sort', 'asc']],
+    });
+    const items = [];
+    for (const field of fields) {
+      items.push(await field.toProps());
+    }
+    return items;
   }
 
   /**
@@ -54,33 +69,9 @@ export class CollectionModel extends BaseModel {
    * @param opts 
    */
   async loadTableOptions(opts: any = {}) {
-    const options = await this.getOptions();
-    // const prevTable = this.database.getTable(this.get('name'));
-    // const prevOptions = prevTable ? prevTable.getOptions() : {};
-    // table 是初始化和重新初始化
-    const table = this.database.table(options);
-    // console.log({options, actions: table.getOptions()['actions']})
-
-    // 如果关系表未加载，一起处理
-    // const associationTableNames = [];
-    // for (const [key, association] of table.getAssociations()) {
-    //   // TODO：是否需要考虑重载的情况？（暂时是跳过处理）
-    //   if (!this.database.isDefined(association.options.target)) {
-    //     continue;
-    //   }
-    //   associationTableNames.push(association.options.target);
-    // }
-    // console.log({associationTableNames});
-    // if (associationTableNames.length) {
-    //   await CollectionModel.load({
-    //     ...opts,
-    //     where: {
-    //       name: {
-    //         [Op.in]: associationTableNames,
-    //       }
-    //     }
-    //   });
-    // }
+    const options = await this.toProps();
+    const { generalFields = [], systemFields = [], ...others } = options;
+    const table = this.database.table({ ...others, fields: generalFields.concat(systemFields) });
     return table;
   }
 
@@ -110,30 +101,6 @@ export class CollectionModel extends BaseModel {
     });
   }
 
-  async getFieldsOptions() {
-    const fieldsOptions = [];
-    const fields = await this.getFields();
-    for (const field of fields) {
-      fieldsOptions.push(await field.getOptions());
-    }
-    return fieldsOptions;
-  }
-
-  async getOptions(): Promise<TableOptions> {
-    const options: any = {
-      ...this.get(),
-      actions: await this.getActions(),
-      fields: await this.getFieldsOptions(),
-    }
-    // @ts-ignore
-    // console.log(this.constructor.associations);
-    // @ts-ignore
-    if (this.constructor.hasAlias('views_v2')) {
-      options.views_v2 = await this.getViews_v2();
-    }
-    return options;
-  }
-
   /**
    * TODO：需要考虑是初次加载还是重载
    *
@@ -155,87 +122,4 @@ export class CollectionModel extends BaseModel {
       });
     }
   }
-
-  static async import(data: TableOptions, options: SaveOptions = {}): Promise<CollectionModel> {
-    data = _.cloneDeep(data);
-    // @ts-ignore
-    const { update } = options;
-    let collection: CollectionModel;
-    if (data.name) {
-      collection = await this.findOne({
-        ...options,
-        where: {
-          name: data.name,
-        },
-      });
-    }
-    if (collection) {
-      // @ts-ignore
-      await collection.update(data, options);
-    }
-    if (!collection) {
-      // @ts-ignore
-      collection = await this.create(data, options);
-    }
-
-    const associations = ['fields', 'actions', 'views_v2'];
-    for (const key of associations) {
-      if (!Array.isArray(data[key])) {
-        continue;
-      }
-      const Model = this.database.getModel(key);
-      if (!Model) {
-        continue;
-      }
-      let ids = [];
-      for (const index in data[key]) {
-        if (key === 'fields') {
-          ids = await Model.import(data[key], {
-            ...options,
-            collectionName: collection.name,
-          });
-          continue;
-        }
-        let model;
-        const item = data[key][index];
-        if (item.name) {
-          model = await Model.findOne({
-            ...options,
-            where: {
-              collection_name: collection.name,
-              name: item.name,
-            },
-          });
-        }
-        if (model) {
-          await model.update({
-            ...item,
-            // sort: index+1
-          }, options);
-        }
-        if (!model) {
-          model = await Model.create(
-            {
-              ...item,
-              // sort: index+1,
-              collection_name: collection.name,
-            },
-            // @ts-ignore
-            options
-          );
-        }
-        if (model) {
-          ids.push(model.id);
-        }
-      }
-      if (ids.length && collection.get('internal')) {
-        await collection.updateAssociations({
-          [key]: ids,
-        });
-      }
-    }
-    return collection;
-  }
 }
-
-export default CollectionModel;

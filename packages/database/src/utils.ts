@@ -58,6 +58,7 @@ export function toWhere(options: any, context: ToWhereContext = {}) {
             ctx,
             model,
             database,
+            dialect: database.sequelize.getDialect(),
             fieldPath: name ? `${name}.${prefix}` : prefix,
           });
           if (result.constructor.name === 'Literal') {
@@ -336,3 +337,14 @@ export function isNumber(num) {
   }
   return false;
 };
+
+let IDX = 36,
+  HEX = ''
+while (IDX--) HEX += IDX.toString(36)
+
+export function uid(len?: number) {
+  let str = '',
+    num = len || 11
+  while (num--) str += HEX[(Math.random() * 36) | 0]
+  return str
+}

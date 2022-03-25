@@ -1,77 +1,137 @@
 import path from 'path';
-import { Application } from '@nocobase/server';
-import hooks from './hooks';
-import { registerModels, Table } from '@nocobase/database';
+import { Plugin } from '@nocobase/server';
+import { registerModels, Table, uid } from '@nocobase/database';
 import * as models from './models';
+import { createOrUpdate, findAll } from './actions';
+import { create, update } from './actions/fields';
 
-export default async function (this: Application, options = {}) {
-  const database = this.database;
-  const resourcer = this.resourcer;
-  // 提供全局的 models 注册机制
-  registerModels(models);
+registerModels(models);
 
-  database.import({
-    directory: path.resolve(__dirname, 'collections'),
-  });
+export default {
+  name: 'collections',
+  async load(this: Plugin) {
+    const database = this.app.db;
 
-  database.addHook('afterUpdateAssociations', async function (model, options) {
-    if (model instanceof models.FieldModel) {
-      if (model.get('interface') === 'subTable') {
-        const { migrate = true } = options;
-        const Collection = model.database.getModel('collections');
-        await Collection.load({ ...options, where: { name: model.get('collection_name') } });
-        migrate && await model.migrate(options);
-      }
-    }
-  });
-
-  Object.keys(hooks).forEach(modelName => {
-    const Model = database.getModel(modelName);
-    Object.keys(hooks[modelName]).forEach(hookKey => {
-      // TODO(types): 多层 map 映射类型定义较为复杂，暂时忽略
-      // @ts-ignore
-      Model.addHook(hookKey, hooks[modelName][hookKey]);
+    database.import({
+      directory: path.resolve(__dirname, 'collections'),
     });
-  });
 
-  const Collection = database.getModel('collections');
-  Collection.addHook('afterCreate', async (model: any, options) => {
-    if (model.get('developerMode')) {
-      return;
-    }
+    this.app.on('beforeStart', async () => {
+      await database.getModel('collections').load({
+        // TODO(bug): quick fix just comment out
+        skipExisting: true,
+      });
+    });
 
-    if (model.get('statusable') === false) {
-      return;
-    }
-
-    console.log("model.get('developerMode')", model.get('name'));
-
-    const { transaction = await model.sequelize.transaction() } = options;
-
-    await model.createField({
-      interface: 'radio',
-      name: 'status',
-      type: 'string',
-      filterable: true,
-      title: '状态',
-      // index: true,
-      dataSource: [
-        {
-          label: '已发布',
-          value: 'publish',
-        },
-        {
-          label: '草稿',
-          value: 'draft',
+    this.app.on('db.init', async () => {
+      const tableNames = ['users', 'applications', 'roles'];
+      const Collection = database.getModel('collections');
+      for (const tableName of tableNames) {
+        const table = database.getTable(tableName);
+        if (!table) {
+          continue;
         }
-      ],
-      component: {
-        type: 'radio',
-      },
-    }, { transaction });
+        const config = table.getOptions();
+        const collection = await Collection.create(config);
+        // 把当前系统排序字段，排除掉，不写入fields表
+        const fields = config.fields?.filter((field) => field.type !== 'sort');
+        await collection.updateAssociations({
+          generalFields: fields.filter((field) => field.state !== 0),
+          systemFields: fields.filter((field) => field.state === 0),
+        });
+        // await collection.migrate();
+      }
+    });
 
-    if (!options.transaction) {
-      await transaction.commit();
-    }
-  });
-}
+    const [Collection, Field] = database.getModels(['collections', 'fields']);
+
+    database.on('fields.beforeCreate', async (model) => {
+      if (!model.get('name')) {
+        model.set('name', model.get('key'));
+      }
+      if (!model.get('collection_name') && model.get('parentKey')) {
+        const field = await Field.findByPk(model.get('parentKey'));
+        if (field) {
+          const { target } = field.get('options') || {};
+          if (target) {
+            model.set('collection_name', target);
+          }
+        }
+      }
+    });
+
+    database.on('fields.beforeUpdate', async (model) => {
+      console.log('beforeUpdate', model.key);
+      if (!model.get('collection_name') && model.get('parentKey')) {
+        const field = await Field.findByPk(model.get('parentKey'));
+        if (field) {
+          const { target } = field.get('options') || {};
+          if (target) {
+            model.set('collection_name', target);
+          }
+        }
+      }
+    });
+
+    database.on('fields.afterCreate', async (model) => {
+      console.log('afterCreate', model.key, model.get('collection_name'));
+      if (model.get('interface') !== 'subTable') {
+        return;
+      }
+      const { target } = model.get('options') || {};
+      // const uiSchemaKey = model.get('ui_schema_key');
+      // console.log({ uiSchemaKey })
+      try {
+        let collection = await Collection.findOne({
+          where: {
+            name: target,
+          },
+        });
+        if (!collection) {
+          collection = await Collection.create({
+            name: target,
+            // ui_schema_key: uiSchemaKey,
+          });
+        }
+        await collection.migrate();
+      } catch (error) {
+        throw error;
+      }
+    });
+
+    database.on('fields.afterUpdate', async (model) => {
+      console.log('afterUpdate');
+      if (model.get('interface') !== 'subTable') {
+        return;
+      }
+      const { target } = model.get('options') || {};
+      try {
+        let collection = await Collection.findOne({
+          where: {
+            name: target,
+          },
+        });
+        if (!collection) {
+          collection = await Collection.create({
+            name: target,
+          });
+        }
+        // if (model.get('ui_schema_key')) {
+        //   collection.set('ui_schema_key', model.get('ui_schema_key'));
+        //   await collection.save({ hooks: false });
+        // }
+        await collection.migrate();
+      } catch (error) {
+        throw error;
+      }
+    });
+
+    this.app.resourcer.registerActionHandler('collections.fields:create', create);
+    this.app.resourcer.registerActionHandler('collections.fields:update', update);
+    this.app.resourcer.registerActionHandler('collections:findAll', findAll);
+    this.app.resourcer.registerActionHandler('collections:createOrUpdate', createOrUpdate);
+    this.app.resourcer.registerActionHandler('fields:create', create);
+    this.app.resourcer.registerActionHandler('fields:update', update);
+    this.app.resourcer.registerActionHandler('collections:create', createOrUpdate);
+  },
+};

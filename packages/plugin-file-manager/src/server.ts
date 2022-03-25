@@ -1,25 +1,47 @@
 import path from 'path';
 import Database from '@nocobase/database';
 import Resourcer from '@nocobase/resourcer';
+import { PluginOptions } from '@nocobase/server';
 
 import {
   action as uploadAction,
   middleware as uploadMiddleware,
 } from './actions/upload';
-import {
-  middleware as localMiddleware,
-} from './storages/local';
+import { getStorageConfig } from './storages';
+import { STORAGE_TYPE_LOCAL } from './constants';
 
-export default async function () {
-  const database: Database = this.database;
-  const resourcer: Resourcer = this.resourcer;
+export default {
+  name: 'file-manager',
+  async load() {
+    const database: Database = this.app.db;
+    const resourcer: Resourcer = this.app.resourcer;
+  
+    database.import({
+      directory: path.resolve(__dirname, 'collections'),
+    });
+  
+    // 暂时中间件只能通过 use 加进来
+    resourcer.use(uploadMiddleware);
+    resourcer.registerActionHandler('upload', uploadAction);
 
-  database.import({
-    directory: path.resolve(__dirname, 'collections'),
-  });
+    const { DEFAULT_STORAGE_TYPE } = process.env;
 
-  // 暂时中间件只能通过 use 加进来
-  resourcer.use(uploadMiddleware);
-  resourcer.registerActionHandler('upload', uploadAction);
-  localMiddleware(this);
-}
+    if (process.env.NOCOBASE_ENV !== 'production') {
+      this.app.on('beforeStart', async () => {
+        await getStorageConfig(STORAGE_TYPE_LOCAL).middleware(this.app);
+      });
+    }
+
+    this.app.on('db.init', async () => {
+      const defaultStorageConfig = getStorageConfig(DEFAULT_STORAGE_TYPE);
+      if (defaultStorageConfig) {
+        const StorageModel = database.getModel('storages');
+        await StorageModel.create({
+          ...defaultStorageConfig.defaults(),
+          type: DEFAULT_STORAGE_TYPE,
+          default: true
+        });
+      }
+    });
+  },
+} as PluginOptions;

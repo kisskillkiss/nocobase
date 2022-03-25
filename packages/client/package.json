@@ -1,18 +1,45 @@
 {
-	"name": "@nocobase/client",
-	"version": "0.4.0-alpha.0",
-	"main": "lib/index.js",
-	"license": "MIT",
-  "resolutions": {
-    "@types/react": "16.14.0"
+  "name": "@nocobase/client",
+  "version": "0.5.0-alpha.38",
+  "main": "lib/index.js",
+  "typings": "lib/index.d.ts",
+  "license": "MIT",
+  "scripts": {
+    "build": "rimraf -rf lib esm dist && npm run build:cjs",
+    "build:cjs": "tsc --declaration"
   },
-	"dependencies": {
-    "@ant-design/icons": "^4.2.2",
-    "@types/react": "16.14.0",
-		"ahooks": "^2.7.1",
-		"antd": "^4.7.3",
-		"react": "16.14.0",
-		"umi": "^3.2.24",
-		"umi-request": "^1.3.5"
-	}
+  "peerDependencies": {
+    "@types/react": ">=16.8.0 || >=17.0.0",
+    "@types/react-dom": ">=16.8.0 || >=17.0.0",
+    "antd": "^4.0.0",
+    "react": ">=16.8.0 || >=17.0.0",
+    "react-dom": ">=16.8.0 || >=17.0.0",
+    "react-router-dom": ">=5.2.0"
+  },
+  "gitHead": "e7df1f93c4e23b9a666d99ee7372c02bdaec97c4",
+  "dependencies": {
+    "@antv/g2plot": "^2.3.27",
+    "@dnd-kit/core": "4.0.0-next-2021720152655",
+    "@dnd-kit/sortable": "5.0.0-next-2021720152655",
+    "@formily/antd": "2.0.0",
+    "@formily/core": "2.0.0",
+    "@formily/react": "2.0.0",
+    "@monaco-editor/react": "^4.2.1",
+    "ahooks": "^2.10.2",
+    "axios": "^0.21.1",
+    "beautiful-react-hooks": "^0.35.0",
+    "constate": "^3.3.0",
+    "file-saver": "^2.0.5",
+    "flat": "^5.0.2",
+    "html-react-parser": "^1.2.7",
+    "lodash": "^4.17.21",
+    "marked": "^4.0.5",
+    "monaco-editor": "^0.25.2",
+    "react-big-calendar": "^0.33.6",
+    "react-helmet": "^6.1.0",
+    "react-i18next": "^11.12.0",
+    "react-image-lightbox": "^5.1.4",
+    "umi-request": "^1.3.5",
+    "use-deep-compare-effect": "^1.8.1"
+  }
 }

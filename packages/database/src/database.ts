@@ -8,6 +8,7 @@ import Table, { MergeOptions, TableOptions } from './table';
 import { Model, ModelCtor } from './model';
 import { requireModule } from './utils';
 import _ from 'lodash';
+import { EventEmitter } from 'events';
 
 export interface SyncOptions extends SequelizeSyncOptions {
 
@@ -33,7 +34,7 @@ export interface ImportOptions {
 export interface DatabaseOptions extends Options {
 }
 
-export type HookType = 'beforeTableInit' | 'afterTableInit' | 'beforeAddField' | 'afterAddField';
+// export type HookType = 'beforeTableInit' | 'afterTableInit' | 'beforeAddField' | 'afterAddField';
 
 export class Extend {
   tableOptions: TableOptions;
@@ -48,7 +49,41 @@ export function extend(tableOptions: TableOptions, mergeOptions: MergeOptions = 
   return new Extend(tableOptions, mergeOptions);
 }
 
-export default class Database {
+type HookType =
+  'beforeValidate' |
+  'afterValidate' |
+  'beforeCreate' |
+  'afterCreate' |
+  'beforeDestroy' |
+  'afterDestroy' |
+  'beforeRestore' |
+  'afterRestore' |
+  'beforeUpdate' |
+  'afterUpdate' |
+  'beforeSave' |
+  'afterSave' |
+  'beforeBulkCreate' |
+  'afterBulkCreate' |
+  'beforeBulkDestroy' |
+  'afterBulkDestroy' |
+  'beforeBulkRestore' |
+  'afterBulkRestore' |
+  'beforeBulkUpdate' |
+  'afterBulkUpdate' |
+  'beforeSync' |
+  'afterSync' |
+  'beforeBulkSync' |
+  'afterBulkSync' |
+  'beforeDefine' |
+  'afterDefine' |
+  'beforeInit' |
+  'afterInit' |
+  'beforeConnect' |
+  'afterConnect' |
+  'beforeDisconnect' |
+  'afterDisconnect';
+
+  export default class Database extends EventEmitter {
 
   public readonly sequelize: Sequelize;
 
@@ -70,9 +105,146 @@ export default class Database {
 
   protected extTableOptions = new Map<string, any>();
 
-  constructor(options: DatabaseOptions) {
+  protected hookTypes = new Map(Object.entries({
+    beforeValidate: 1,
+    afterValidate: 1,
+    beforeCreate: 1,
+    afterCreate: 1,
+    beforeDestroy: 1,
+    afterDestroy: 1,
+    beforeRestore: 1,
+    afterRestore: 1,
+    beforeUpdate: 1,
+    afterUpdate: 1,
+    beforeSave: 1,
+    afterSave: 1,
+
+    beforeBulkCreate: 2,
+    afterBulkCreate: 2,
+
+    beforeBulkDestroy: 3,
+    afterBulkDestroy: 3,
+    beforeBulkRestore: 3,
+    afterBulkRestore: 3,
+    beforeBulkUpdate: 3,
+    afterBulkUpdate: 3,
+
+    beforeSync: 4,
+    afterSync: 4,
+    beforeBulkSync: 4,
+    afterBulkSync: 4,
+
+    beforeDefine: 0,
+    afterDefine: 0,
+    beforeInit: 0,
+    afterInit: 0,
+    beforeConnect: 0,
+    afterConnect: 0,
+    beforeDisconnect: 0,
+    afterDisconnect: 0,
+  }));
+
+  constructor(options?: DatabaseOptions) {
+    super();
     this.options = options;
     this.sequelize = new Sequelize(options);
+  }
+
+  private _getHookType(event: any) {
+    if (typeof event === 'string') {
+      event = event.split('.');
+    }
+    if (!Array.isArray(event)) {
+      return;
+    }
+    const hookType = [...event].pop();
+    if (!this.hookTypes.has(hookType)) {
+      return;
+    }
+    return hookType;
+  }
+
+  on(event: HookType | Omit<string, HookType> | symbol, listener: (...args: any[]) => void) {
+    const hookType = this._getHookType(event);
+    if (hookType) {
+      const state = this.hookTypes.get(hookType);
+
+      this.sequelize.addHook(hookType, async (...args: any[]) => {
+        let modelName: string;
+        switch (state) {
+          case 1:
+            modelName = args?.[0]?.constructor?.name;
+            break;
+          case 2:
+            modelName = args?.[1]?.model?.name;
+            break;
+          case 3:
+            modelName = args?.[0]?.model?.name;
+            break;
+        }
+        // console.log({ modelName, args });
+        if (modelName) {
+          await this.emitAsync(`${modelName}.${hookType}`, ...args);
+        }
+        await this.emitAsync(hookType, ...args);
+      });
+      this.hookTypes.delete(hookType);
+    }
+    return super.on(event as any, listener);
+  }
+
+  async emitAsync(event: string | symbol, ...args: any[]): Promise<boolean> {
+    // @ts-ignore
+    const events = this._events;
+    let callbacks = events?.[event];
+    if (!callbacks) {
+      return false;
+    }
+    // helper function to reuse as much code as possible
+    const run = (cb) => {
+      switch (args.length) {
+        // fast cases
+        case 0:
+          cb = cb.call(this);
+          break;
+        case 1:
+          cb = cb.call(this, args[0]);
+          break;
+        case 2:
+          cb = cb.call(this, args[0], args[1]);
+          break;
+        case 3:
+          cb = cb.call(this, args[0], args[1], args[2]);
+          break;
+        // slower
+        default:
+          cb = cb.apply(this, args);
+      }
+
+      if (
+        cb && (
+          cb instanceof Promise ||
+          typeof cb.then === 'function'
+        )
+      ) {
+        return cb;
+      }
+
+      return Promise.resolve(true);
+    };
+
+    if (typeof callbacks === 'function') {
+      await run(callbacks);
+    } else if (typeof callbacks === 'object') {
+      callbacks = callbacks.slice().filter(Boolean);
+      await callbacks.reduce((prev, next) => {
+        return prev.then((res) => {
+          return run(next).then((result) => Promise.resolve(res.concat(result)));
+        });
+      }, Promise.resolve([]));
+    }
+
+    return true;
   }
 
   /**
@@ -289,6 +461,7 @@ export default class Database {
    * 关闭数据库连接
    */
   public async close() {
+    this.removeAllListeners();
     return this.sequelize.close();
   }
 
@@ -298,7 +471,7 @@ export default class Database {
    * @param hookType 
    * @param fn 
    */
-  public addHook(hookType: HookType | string, fn: Function) {
+   public addHook(hookType: HookType | string, fn: Function) {
     const hooks = this.hooks[hookType] || [];
     hooks.push(fn);
     this.hooks[hookType] = hooks;

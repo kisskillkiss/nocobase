@@ -1,21 +1,32 @@
+import path from 'path';
 import { defineConfig } from 'umi';
+import dotenv from 'dotenv';
+import { getUmiConfig } from '@nocobase/utils';
+
+dotenv.config({
+  path: path.resolve(__dirname, '../../.env'),
+});
+
+process.env.MFSU_AD = 'none';
+
+const umiConfig = getUmiConfig();
 
 export default defineConfig({
-  title: false,
   nodeModulesTransform: {
     type: 'none',
   },
   define: {
-    'process.env.API': `/api`,
-    // 'process.env.API': `http://localhost:${process.env.API_PORT}/api`,
+    ...umiConfig.define,
   },
+  // only proxy when using `umi dev`
+  // if the assets are built, will not proxy
   proxy: {
-    '/api': {
-      'target': `http://localhost:${process.env.API_PORT}/`,
-      'changeOrigin': true,
-      'pathRewrite': { '^/api' : '/api' },
-    },
+    ...umiConfig.proxy,
   },
+  routes: [
+    { path: '/', exact: false, component: '@/pages/index' },
+  ],
+  fastRefresh: {},
   locale: {
     default: 'zh-CN',
     // antd: false,
@@ -23,11 +34,8 @@ export default defineConfig({
     baseNavigator: false,
     baseSeparator: '-',
   },
-  routes: [
-    {
-      exact: false,
-      path: '/:path(.*)',
-      component: '@/pages/index',
-    },
-  ],
+  chainWebpack(config) {
+    config.module.rules.get('ts-in-node_modules').include.add(path.resolve(__dirname, '../client/src'));
+    config.resolve.alias.set('@nocobase/client', path.resolve(__dirname, '../client/src'));
+  },
 });

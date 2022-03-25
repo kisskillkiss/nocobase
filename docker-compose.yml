@@ -1,22 +1,24 @@
 version: "3"
 networks:
-  node-network:
+  nocobase:
     driver: bridge
 services:
+  adminer:
+    image: adminer
+    restart: always
+    networks:
+      - nocobase
+    ports:
+      - ${ADMINER_PORT}:8080
   verdaccio:
     image: verdaccio/verdaccio
-    container_name: "verdaccio"
     networks:
-      - node-network
+      - nocobase
     environment:
-      - VERDACCIO_PORT=${VERDACCIO_PORT}
+      VERDACCIO_PORT: ${VERDACCIO_PORT}
     restart: always
     ports:
-      - "${VERDACCIO_PORT}:4873"
-    # volumes:
-      # - "./verdaccio/storage:/verdaccio/storage"
-      # - "./verdaccio/config:/verdaccio/conf"
-      # - "./verdaccio/plugins:/verdaccio/plugins"
+      - "${VERDACCIO_PORT}:${VERDACCIO_PORT}"
   mysql:
     image: mysql:5.7
     environment:
@@ -28,26 +30,31 @@ services:
     ports:
       - "${DB_MYSQL_PORT}:3306"
     networks:
-      - node-network
+      - nocobase
   postgres:
     image: postgres:10
     restart: always
     ports:
       - "${DB_POSTGRES_PORT}:5432"
     networks:
-      - node-network
+      - nocobase
     command: postgres -c wal_level=logical
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_DB: ${DB_DATABASE}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-  app:
+  nocobase:
     build:
       context: .
       dockerfile: Dockerfile
-    command: [ "yarn", "start" ]
-    ports:
-      - "${APP_HTTP_PORT}:${APP_HTTP_PORT}"
-      - "${HTTP_PORT}:${HTTP_PORT}"
     networks:
-      - node-network
+      - nocobase
+    command: [ "yarn", "start" ]
+    working_dir: /app
+    env_file: ./.env
+    volumes:
+      - ./:/app
+    expose:
+      - 8000
+    ports:
+      - "${APP_PORT}:8000"

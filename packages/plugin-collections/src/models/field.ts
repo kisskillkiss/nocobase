@@ -1,263 +1,108 @@
 import _ from 'lodash';
-import BaseModel from './base';
-import { FieldOptions, BELONGSTO, BELONGSTOMANY, HASMANY } from '@nocobase/database';
-import * as types from '../interfaces/types';
-import { merge } from '../utils';
-import { BuildOptions } from 'sequelize';
-import { SaveOptions, Utils } from 'sequelize';
-import { generateCollectionName } from './collection';
+import { Model } from '@nocobase/database';
 
-interface FieldImportOptions extends SaveOptions {
-  parentId?: number;
-  collectionName?: string;
-}
-
-export function generateValueName(title?: string): string {
-  return `${Math.random().toString(36).replace('0.', '').slice(-4).padStart(4, '0')}`;
-}
-
-export function generateFieldName(title?: string): string {
-  return `f_${Math.random().toString(36).replace('0.', '').slice(-4).padStart(4, '0')}`;
-}
-
-export class FieldModel extends BaseModel {
-
-  constructor(values: any = {}, options: any = {}) {
-    let data = {
-      ...(values.options || {}),
-      ...values,
-      // ..._.omit(values, 'options'),
-    };
-    const interfaceType = data.interface;
-    if (interfaceType) {
-      const { options } = types[interfaceType];
-      let args = [options, data];
-      // @ts-ignore
-      data = merge(...args);
-      if (['hasOne', 'hasMany', 'belongsTo', 'belongsToMany'].includes(data.type)) {
-        // 关系字段如果没有 name，相关参数都随机生成
-        if (!data.name) {
-          data.name = generateFieldName();
-          data.paired = true;
-          // 通用，关系表
-          if (!data.target) {
-            data.target = generateCollectionName();
-          }
-          // 通用，外键
-          if (!data.foreignKey) {
-            data.foreignKey = generateFieldName();
-          }
-          if (data.type !== 'belongsTo' && !data.sourceKey) {
-            data.sourceKey = 'id';
-          }
-          if (['belongsTo', 'belongsToMany'].includes(data.type) && !data.targetKey) {
-            data.targetKey = 'id';
-          }
-          // 多对多关联
-          if (data.type === 'belongsToMany') {
-            if (!data.through) {
-              data.through = generateCollectionName();
-            }
-            if (!data.otherKey) {
-              data.otherKey = generateFieldName();
-            }
-          }
-        }
-        // 有 name，但是没有 target
-        if (!data.target) {
-          data.target = ['hasOne', 'belongsTo'].includes(data.type) ? Utils.pluralize(data.name) : data.name;
-        }
-      }
-      if (!data.name) {
-        data.name = generateFieldName();
-      }
-    }
+export class Field extends Model {
+  static async create(value?: any, options?: any): Promise<any> {
+    const attributes = this.toAttributes(value);
     // @ts-ignore
-    super(data, options);
+    const model: Model = await super.create(attributes, options);
+    return model;
   }
 
-  generateName() {
-    this.set('name', generateFieldName());
+  static toAttributes(value = {}): any {
+    const data: any = _.cloneDeep(value);
+    const keys = [
+      ...Object.keys(this.rawAttributes),
+      ...Object.keys(this.associations),
+    ];
+    if (!data.dataType && data.type) {
+      data.dataType = data.type;
+    }
+    const attrs = _.pick(data, keys);
+    const options = _.omit(data, [...keys, 'type']);
+    return { ...attrs, options };
   }
 
-  async generatePairField(options) {
-    const { interface: control, paired, type, target, sourceKey, targetKey, foreignKey, otherKey, through, collection_name } = this.get();
-    if (control !== 'linkTo' || type !== 'belongsToMany' || !collection_name || !paired) {
+  async toProps() {
+    const json = this.toJSON();
+    const data: any = _.omit(json, ['options', 'created_at', 'updated_at']);
+    const options = json['options'] || {};
+    const fields = await this.getNestedFields();
+    const props = { type: json['dataType'], ...data, ...options };
+    if (fields.length) {
+      props['children'] = fields;
+    }
+    if (this.getUiSchema) {
+      const uiSchema = await this.getUiSchema();
+      if (uiSchema) {
+        // props['uiSchema1'] = uiSchema;
+        props['uiSchema'] = await uiSchema.toJSONSchema();
+      }
+    }
+    return props;
+  }
+
+  async migrate() {
+    const collection = await this.getCollection();
+    await collection.migrate()
+  }
+
+  async getNestedFields() {
+    const fields = await this.getChildren();
+    const items = [];
+    for (const field of fields) {
+      items.push(await field.toProps());
+    }
+    return items;
+  }
+
+  async generateReverseField(opts: any = {}) {
+    const { migrate = true } = opts;
+    if (this.get('interface') !== 'linkTo') {
       return;
     }
-    if (!this.database.isDefined(target)) {
+    if (this.get('reverseKey')) {
       return;
     }
-    const targetTable = this.database.getTable(target);
-    const Field = FieldModel;
-    let labelField = 'id';
-    const targetField = await Field.findOne({
-      ...options,
+    const fieldCollection = await this.getCollection();
+    const options: any = this.get('options') || {};
+    const Collection = this.database.getModel('collections');
+    let collection = await Collection.findOne({
       where: {
-        type: 'string',
-        collection_name: target,
+        name: options.target,
       },
-      order: [['sort', 'asc']],
     });
-    if (targetField) {
-      labelField = targetField.get('name');
+    if (!collection) {
+      return;
     }
-    const collection = await this.getCollection(options);
-    let targetOptions: any = {
-      ...types.linkTo.options,
+    const reverseField = await collection.createField({
       interface: 'linkTo',
-      title: collection.get('title'),
-      collection_name: target,
-      options: {
-        paired: true,
-        target: collection_name,
-        labelField,
-      },
-      component: {
-        showInTable: true,
-        showInForm: true,
-        showInDetail: true,
-      },
-    };
-    // 暂时不处理 hasone
-    switch (type) {
-      case 'hasMany':
-        targetOptions.type = 'belongsTo';
-        targetOptions.options.targetKey = sourceKey;
-        targetOptions.options.foreignKey = foreignKey;
-        break;
-      case 'belongsTo':
-        targetOptions.type = 'hasMany';
-        targetOptions.options.sourceKey = targetKey;
-        targetOptions.options.foreignKey = foreignKey;
-        break;
-      case 'belongsToMany':
-        targetOptions.type = 'belongsToMany';
-        targetOptions.options.sourceKey = targetKey;
-        targetOptions.options.foreignKey = otherKey;
-        targetOptions.options.targetKey = sourceKey;
-        targetOptions.options.otherKey = foreignKey;
-        targetOptions.options.through = through;
-        break;
-    }
-    const associations = targetTable.getAssociations();
-    // console.log(associations);
-    for (const association of associations.values()) {
-      if (association instanceof BELONGSTOMANY) {
-        if (
-          association.options.foreignKey === otherKey
-          && association.options.sourceKey === targetKey
-          && association.options.otherKey === foreignKey
-          && association.options.targetKey === sourceKey
-          && association.options.through === through
-        ) {
-          return;
-        }
-      }
-      // if (association instanceof BELONGSTO) {
-      //   continue;
-      // }
-      // if (association instanceof HASMANY) {
-      //   continue;
-      // }
-    }
-    const f = await Field.create(targetOptions, options);
-    // console.log({targetOptions}, f.get('options'));
-  }
-
-  setInterface(value) {
-    const { options } = types[value];
-    let args = [];
-    // 如果是新数据或 interface 不相等，interface options 放后
-    if (this.isNewRecord || this.get('interface') !== value) {
-      args = [this.get(), options];
-    } else {
-      // 已存在的数据更新，不相等，interface options 放前面
-      args = [options, this.get()];
-    }
-    // @ts-ignore
-    const values = merge(...args);
-    this.set(values);
-  }
-
-  async getOptions(): Promise<FieldOptions> {
-    return this.get();
-  }
-
-  async migrate(options: any = {}) {
-    const collectionName = this.get('collection_name');
-    if (!collectionName) {
-      return false;
-    }
-    if (!this.database.isDefined(collectionName)) {
-      throw new Error(`${collectionName} is not defined`);
-    }
-    const table = this.database.getTable(collectionName);
-    table.addField(await this.getOptions());
-    await table.sync({
-      force: false,
-      alter: {
-        drop: false,
+      dataType: 'belongsToMany',
+      through: options.through,
+      foreignKey: options.otherKey,
+      otherKey: options.foreignKey,
+      sourceKey: options.targetKey,
+      targetKey: options.sourceKey,
+      target: this.get('collection_name'),
+      reverseKey: this.get('key'),
+    });
+    await reverseField.updateAssociations({
+      uiSchema: {
+        type: 'array',
+        title: `${fieldCollection?.title}`,
+        'x-component': 'Select.Drawer',
+        'x-component-props': {
+          multiple: true,
+        },
+        'x-decorator': 'FormItem',
+        'x-designable-bar': 'Select.Drawer.DesignableBar',
       }
     });
-  }
-
-  static async import(items: any, options: FieldImportOptions = {}): Promise<any> {
-    const { parentId, collectionName } = options;
-    if (!Array.isArray(items)) {
-      items = [items];
+    await this.update({
+      reverseKey: reverseField.key,
+    });
+    if (migrate) {
+      await collection.migrate();
     }
-    const ids = [];
-    for (const index in items) {
-      const item = items[index];
-      let model;
-      const where: any = {};
-      if (parentId) {
-        where.parent_id = parentId
-      } else {
-        where.collection_name = collectionName;
-      }
-      if (item.name) {
-        model = await this.findOne({
-          ...options,
-          where: {
-            ...where,
-            name: item.name,
-          },
-        });
-      }
-      if (!model) {
-        const tmp: any = {};
-        if (parentId) {
-          tmp.parent_id = parentId
-        } else {
-          tmp.collection_name = collectionName;
-        }
-        model = await this.create(
-          {
-            ...item,
-            ...tmp,
-          },
-          //@ts-ignore
-          options
-        );
-      } else {
-        //@ts-ignore
-        await model.update(item, options);
-      }
-      if (Array.isArray(item.children)) {
-        const childrenIds = await this.import(item.children, {
-          ...options,
-          parentId: model.id,
-          collectionName,
-        });
-        await model.updateAssociations({
-          children: childrenIds,
-        }, options);
-      }
-    }
-    return ids;
   }
 }
-
-export default FieldModel;

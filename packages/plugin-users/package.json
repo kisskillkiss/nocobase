@@ -1,15 +1,14 @@
 {
   "name": "@nocobase/plugin-users",
-  "version": "0.4.0-alpha.0",
+  "version": "0.5.0-alpha.38",
   "main": "lib/index.js",
   "license": "MIT",
-  "devDependencies": {
-    "@nocobase/actions": "^0.4.0-alpha.0",
-    "@nocobase/server": "^0.4.0-alpha.0",
+  "dependencies": {
+    "@nocobase/server": "^0.5.0-alpha.38",
     "crypto-random-string": "^3.3.0"
   },
-  "dependencies": {
-    "@nocobase/database": "^0.4.0-alpha.0",
-    "@nocobase/resourcer": "^0.4.0-alpha.0"
-  }
+  "devDependencies": {
+    "@nocobase/test": "^0.5.0-alpha.38"
+  },
+  "gitHead": "e7df1f93c4e23b9a666d99ee7372c02bdaec97c4"
 }
